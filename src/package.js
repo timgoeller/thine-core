@@ -26,6 +26,14 @@ class Package extends events.EventEmitter {
     this.emit('ready')
   }
 
+  get key () {
+    return this.taggedDrive.getKey()
+  }
+
+  get corestore () {
+    return this.taggedDrive.corestore
+  }
+
   async ready () {
     const self = this
     return new Promise((resolve, reject) => {
