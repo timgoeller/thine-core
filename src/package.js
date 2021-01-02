@@ -17,7 +17,14 @@ class Package extends events.EventEmitter {
   }
 
   async loadExisting (key) {
-
+    if (this.taggedDrive) {
+      throw new Error('Package is already initialized.')
+    }
+    const opts = {
+      corestore: this._corestore
+    }
+    this.taggedDrive = new TreeTaggedHyperdrive(key, opts)
+    await this.taggedDrive.ready()
     this.emit('ready')
   }
 
@@ -25,6 +32,7 @@ class Package extends events.EventEmitter {
     if (this.taggedDrive) {
       throw new Error('Package is already initialized.')
     }
+    this.name = name
     const opts = {
       corestore: this._corestore,
       userData: JSON.stringify({ thine: { name, storageVersion: 1 } })

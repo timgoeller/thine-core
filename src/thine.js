@@ -104,9 +104,8 @@ class Thine extends events.EventEmitter {
             self.publishedStoragePath,
             data.value
           )))
-          await pack.loadExisting(data.key)
           self.publishedPackages[data.key] = pack
-          // self._replicate(pack)
+          pack.loadExisting(data.key)
         })
         .on('error', function (err) {
           reject(err)
@@ -119,9 +118,8 @@ class Thine extends events.EventEmitter {
         })
     })
 
-    console.log(this.publishedPackages)
-
-    console.log('init')
+    await Promise.all(this.publishedPackages.map(pack => pack.ready()))
+    this.publishedPackages.forEach(pack => this._replicate(pack))
     this.emit('ready')
   }
 
