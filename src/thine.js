@@ -43,7 +43,6 @@ class Thine extends events.EventEmitter {
 
     const packUUID = uuidv4()
 
-    // how to give same path???
     const pack = new Package(new Corestore(path.join(
       this.publishedStoragePath,
       packUUID
@@ -83,12 +82,32 @@ class Thine extends events.EventEmitter {
     const key = packageJSON.thineKey
 
     if (key === null || key === undefined) {
-      throw new Error('No key found in package.thine.json')
+      throw new Error('No key found in package.thine.json.')
     }
 
-    const pack = new Package(opts.corestore)
-    pack.loadExisting(packageJSON.name)
+    let pack
+    try {
+      pack = this.publishedPackages[key]
+    } catch (e) {
+      throw new Error('Package not found in database.')
+    }
+
+    if (await pack.versionExists(packageJSON.version)) {
+      throw new Error('This version was already published.')
+    }
+
     await pack.ready()
+
+    let changes = await dft.diff(sourceFolder, { path: '/', fs: pack.fs })
+
+    // TODO, doesn't delete newly ignored files
+    if (opts.filterPatterns !== null && opts.filterPatterns !== undefined) {
+      changes = this._filterChanges(sourceFolder, changes, opts.filterPatterns)
+    }
+
+    await dft.applyRight(sourceFolder, { path: '/', fs: pack.fs }, changes)
+
+    await pack.createVersion(packageJSON.version)
   }
 
   async ready () {

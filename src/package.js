@@ -65,6 +65,11 @@ class Package extends events.EventEmitter {
   async createVersion (version) {
     await this.taggedDrive.put(lexVer.encode(version))
   }
+
+  async versionExists (version) {
+    const ver = await this.taggedDrive.getVersionAtTag(lexVer.encode(version))
+    return ver !== null && ver !== undefined
+  }
 }
 
 module.exports = Package
