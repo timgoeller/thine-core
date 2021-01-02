@@ -7,10 +7,18 @@ class Package extends events.EventEmitter {
   constructor (corestore) {
     super()
     this._corestore = corestore
+
+    const self = this
+    this._ready = new Promise((resolve, reject) => {
+      self.on('ready', () => {
+        resolve()
+      })
+    })
   }
 
   async loadExisting (key) {
 
+    this.emit('ready')
   }
 
   async createNew (name) {
@@ -30,17 +38,16 @@ class Package extends events.EventEmitter {
     return this.taggedDrive.getKey()
   }
 
+  get readableKey () {
+    return this.key.toString('hex')
+  }
+
   get corestore () {
     return this.taggedDrive.corestore
   }
 
   async ready () {
-    const self = this
-    return new Promise((resolve, reject) => {
-      self.on('ready', () => {
-        resolve()
-      })
-    })
+    return this._ready
   }
 
   get fs () {

@@ -9,13 +9,27 @@ const dft = require('diff-file-tree')
 const lexVer = require('./lex-ver')
 const hyperswarm = require('hyperswarm')
 const pump = require('pump')
+const events = require('events')
 const Corestore = require('corestore')
+const level = require('level')
+const { v4: uuidv4 } = require('uuid')
 
-class Thine {
+class Thine extends events.EventEmitter {
   constructor () {
+    super()
     this.rootStorage = path.join(os.homedir(), '.thine')
-    this.publishedPackageCount = 0
     fse.ensureDirSync(this.rootStorage)
+    fse.ensureDirSync(this.publishedStoragePath)
+    this.publishedDB = level(this.publishedStorageDBPath)
+    this.publishedPackages = []
+    const self = this
+    this._ready = new Promise((resolve, reject) => {
+      self.on('ready', () => {
+        resolve()
+      })
+    })
+
+    this._initialize()
   }
 
   async publish (sourceFolder, opts) {
@@ -27,14 +41,20 @@ class Thine {
 
     const packageJSON = await this._readPackageJSON(sourceFolder)
 
+    const packUUID = uuidv4()
+
+    // how to give same path???
     const pack = new Package(new Corestore(path.join(
-      this.publishedStorage,
-      this.publishedPackageCount.toString().padStart(8, '0')
+      this.publishedStoragePath,
+      packUUID
     )))
+
     pack.createNew(packageJSON.name)
     await pack.ready()
 
-    packageJSON.thineKey = pack.taggedDrive.getKey().toString('hex')
+    await this.publishedDB.put(pack.readableKey, packUUID)
+
+    packageJSON.thineKey = pack.readableKey
     this._writePackageJSON(sourceFolder, packageJSON)
 
     let changes = await dft.diff(sourceFolder, { path: '/', fs: pack.fs })
@@ -69,6 +89,40 @@ class Thine {
     const pack = new Package(opts.corestore)
     pack.loadExisting(packageJSON.name)
     await pack.ready()
+  }
+
+  async ready () {
+    await this._ready
+  }
+
+  async _initialize () {
+    const self = this
+    await new Promise((resolve, reject) => {
+      this.publishedDB.createReadStream()
+        .on('data', async function (data) {
+          const pack = new Package(new Corestore(path.join(
+            self.publishedStoragePath,
+            data.value
+          )))
+          await pack.loadExisting(data.key)
+          self.publishedPackages[data.key] = pack
+          // self._replicate(pack)
+        })
+        .on('error', function (err) {
+          reject(err)
+        })
+        .on('close', function () {
+          // ???
+        })
+        .on('end', function () {
+          resolve()
+        })
+    })
+
+    console.log(this.publishedPackages)
+
+    console.log('init')
+    this.emit('ready')
   }
 
   async _readPackageJSON (sourceFolder) {
@@ -118,11 +172,15 @@ class Thine {
     })
   }
 
-  get publishedStorage () {
+  get publishedStoragePath () {
     return path.join(this.rootStorage, 'published')
   }
 
-  get cachedStorage () {
+  get publishedStorageDBPath () {
+    return path.join(this.publishedStoragePath, 'database')
+  }
+
+  get cachedStoragePath () {
     return path.join(this.rootStorage, 'cached')
   }
 }
