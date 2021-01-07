@@ -17,12 +17,28 @@ const { v4: uuidv4 } = require('uuid')
 class Thine extends events.EventEmitter {
   constructor () {
     super()
+
+    const self = this
+
     this.rootStorage = path.join(os.homedir(), '.thine')
     fse.ensureDirSync(this.rootStorage)
     fse.ensureDirSync(this.publishedStoragePath)
-    this.publishedDB = level(this.publishedStorageDBPath)
-    this.publishedPackages = []
-    const self = this
+    fse.ensureDirSync(this.cachedStoragePath)
+
+    this.published = {
+      db: level(self.publishedStorageDBPath),
+      packageList: [],
+      packagePath: self.publishedStoragePath,
+      dbPath: self.publishedStorageDBPath
+    }
+
+    this.cached = {
+      db: level(self.cachedStorageDBPath),
+      packageList: [],
+      packagePath: self.cachedStoragePath,
+      dbPath: self.cachedStorageDBPath
+    }
+
     this._ready = new Promise((resolve, reject) => {
       self.on('ready', () => {
         resolve()
@@ -51,7 +67,7 @@ class Thine extends events.EventEmitter {
     pack.createNew(packageJSON.name)
     await pack.ready()
 
-    await this.publishedDB.put(pack.readableKey, packUUID)
+    await this.published.db.put(pack.readableKey, packUUID)
 
     packageJSON.thineKey = pack.readableKey
     this._writePackageJSON(sourceFolder, packageJSON)
@@ -110,20 +126,86 @@ class Thine extends events.EventEmitter {
     await pack.createVersion(packageJSON.version)
   }
 
+  async install (sourceFolder, opts) {
+    opts = opts || {}
+
+    if (!await fse.pathExists(sourceFolder)) {
+      throw new Error('Source folder does not exist.')
+    }
+
+    const packageJSON = await this._readPackageJSON(sourceFolder)
+    const topLevelDeps = packageJSON.dependencies
+
+    for (const [key, value] of Object.entries(topLevelDeps)) {
+      const packageMetadata = {
+        fullKey: key,
+        key: key.split('/')[1],
+        name: key.split('/')[0],
+        range: value
+      }
+      const pack = await this._loadPack(packageMetadata)
+    }
+  }
+
+  async _loadPack (metadata) {
+    const packLocal = this._tryGetPackageLocal(metadata.key)
+    if (packLocal !== null) {
+      return packLocal
+    } else {
+      const pack = new Package(new Corestore(path.join(
+        this.cached.packagePath,
+        metadata.key
+      )))
+
+      pack.loadExisting(metadata.key)
+
+      await pack.initialized()
+      this._replicate(pack)
+
+      return Promise.race([
+        new Promise((resolve, reject) => {
+          pack.ready().then(() => {
+            resolve(pack)
+          })
+        }),
+        new Promise((resolve, reject) => setTimeout(() => {
+          reject(new Error('Header retrieval timeout for ' + metadata.fullKey))
+        }, 20000))
+      ])
+    }
+  }
+
+  _tryGetPackageLocal (key) {
+    if (key in this.published.packageList) {
+      return this.published.packageList[key]
+    } else if (key in this.cached.packageList) {
+      return this.cached.packageList[key]
+    }
+    return null
+  }
+
   async ready () {
     await this._ready
   }
 
   async _initialize () {
-    const self = this
+    const published = await this._loadPackDBFromDisk(this.published)
+    const cached = await this._loadPackDBFromDisk(this.cached)
+
+    await Promise.all([published, cached])
+
+    this.emit('ready')
+  }
+
+  async _loadPackDBFromDisk (dbData) {
     await new Promise((resolve, reject) => {
-      this.publishedDB.createReadStream()
-        .on('data', async function (data) {
+      dbData.db.createReadStream()
+        .on('data', function (data) {
           const pack = new Package(new Corestore(path.join(
-            self.publishedStoragePath,
+            dbData.packagePath,
             data.value
           )))
-          self.publishedPackages[data.key] = pack
+          dbData.packageList.push(pack)
           pack.loadExisting(data.key)
         })
         .on('error', function (err) {
@@ -131,15 +213,16 @@ class Thine extends events.EventEmitter {
         })
         .on('close', function () {
           // ???
+          resolve()
         })
         .on('end', function () {
           resolve()
         })
     })
 
-    await Promise.all(this.publishedPackages.map(pack => pack.ready()))
-    this.publishedPackages.forEach(pack => this._replicate(pack))
-    this.emit('ready')
+    await Promise.all(dbData.packageList.map(pack => pack.ready()))
+
+    dbData.packageList.forEach(pack => this._replicate(pack))
   }
 
   async _readPackageJSON (sourceFolder) {
@@ -193,12 +276,16 @@ class Thine extends events.EventEmitter {
     return path.join(this.rootStorage, 'published')
   }
 
+  get cachedStoragePath () {
+    return path.join(this.rootStorage, 'cached')
+  }
+
   get publishedStorageDBPath () {
     return path.join(this.publishedStoragePath, 'database')
   }
 
-  get cachedStoragePath () {
-    return path.join(this.rootStorage, 'cached')
+  get cachedStorageDBPath () {
+    return path.join(this.cachedStoragePath, 'database')
   }
 }
 

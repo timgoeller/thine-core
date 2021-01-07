@@ -14,6 +14,11 @@ class Package extends events.EventEmitter {
         resolve()
       })
     })
+    this._initialized = new Promise((resolve, reject) => {
+      self.on('initialized', () => {
+        resolve()
+      })
+    })
   }
 
   async loadExisting (key) {
@@ -24,6 +29,8 @@ class Package extends events.EventEmitter {
       corestore: this._corestore
     }
     this.taggedDrive = new TreeTaggedHyperdrive(key, opts)
+    await this.taggedDrive.initialized()
+    this.emit('initialized')
     await this.taggedDrive.ready()
     this.emit('ready')
   }
@@ -38,6 +45,8 @@ class Package extends events.EventEmitter {
       userData: JSON.stringify({ thine: { name, storageVersion: 1 } })
     }
     this.taggedDrive = new TreeTaggedHyperdrive(null, opts)
+    await this.taggedDrive.initialized()
+    this.emit('initialized')
     await this.taggedDrive.ready()
     this.emit('ready')
   }
@@ -56,6 +65,10 @@ class Package extends events.EventEmitter {
 
   async ready () {
     return this._ready
+  }
+
+  async initialized () {
+    return this._initialized
   }
 
   get fs () {
