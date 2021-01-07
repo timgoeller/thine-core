@@ -101,10 +101,8 @@ class Thine extends events.EventEmitter {
       throw new Error('No key found in package.thine.json.')
     }
 
-    let pack
-    try {
-      pack = this.publishedPackages[key]
-    } catch (e) {
+    const pack = this.published.packageList.find(pack => pack.key.toString('hex') === key)
+    if (pack === undefined) {
       throw new Error('Package not found in database.')
     }
 
@@ -136,6 +134,10 @@ class Thine extends events.EventEmitter {
     const packageJSON = await this._readPackageJSON(sourceFolder)
     const topLevelDeps = packageJSON.dependencies
 
+    const nodeModulesFolderPath = path.join(sourceFolder, 'node_modules')
+
+    await fse.emptyDir(nodeModulesFolderPath)
+
     for (const [key, value] of Object.entries(topLevelDeps)) {
       const packageMetadata = {
         fullKey: key,
@@ -144,6 +146,13 @@ class Thine extends events.EventEmitter {
         range: value
       }
       const pack = await this._loadPack(packageMetadata)
+      const version = await pack.getLatestVersionInSemVerRange(value)
+      const versionDrive = pack.checkoutDriveAtVersion(version.driveVersion)
+      const packPath = path.join(nodeModulesFolderPath, pack.name)
+      await fse.emptyDir(packPath)
+      const changes = await dft.diff({ path: '/', fs: versionDrive }, packPath)
+      console.log(changes)
+      await dft.applyRight({ path: '/', fs: versionDrive }, packPath, changes)
     }
   }
 

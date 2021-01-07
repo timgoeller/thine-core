@@ -33,6 +33,7 @@ class Package extends events.EventEmitter {
     await this.taggedDrive.initialized()
     this.emit('initialized')
     await this.taggedDrive.ready()
+    this.name = JSON.parse(this.taggedDrive.userData).thine.name
     this.emit('ready')
   }
 
@@ -49,6 +50,7 @@ class Package extends events.EventEmitter {
     await this.taggedDrive.initialized()
     this.emit('initialized')
     await this.taggedDrive.ready()
+    this.name = JSON.parse(this.taggedDrive.userData).thine.name
     this.emit('ready')
   }
 
@@ -66,6 +68,10 @@ class Package extends events.EventEmitter {
       version: lexVer.decode(queryResult.key),
       driveVersion: queryResult.value
     }
+  }
+
+  checkoutDriveAtVersion (version) {
+    return this.taggedDrive.drive.checkout(version)
   }
 
   get key () {

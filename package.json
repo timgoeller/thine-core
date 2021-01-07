@@ -18,7 +18,7 @@
     "node-fse-walk": "^1.1.4",
     "pump": "^3.0.0",
     "random-access-memory": "^3.1.1",
-    "tree-tagged-hyperdrive": "^0.0.1",
+    "tree-tagged-hyperdrive": "^0.2.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
