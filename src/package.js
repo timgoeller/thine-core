@@ -7,6 +7,7 @@ class Package extends events.EventEmitter {
   constructor (corestore) {
     super()
     this._corestore = corestore
+    this.rangeParser = new RangeParser()
 
     const self = this
     this._ready = new Promise((resolve, reject) => {
@@ -49,6 +50,22 @@ class Package extends events.EventEmitter {
     this.emit('initialized')
     await this.taggedDrive.ready()
     this.emit('ready')
+  }
+
+  async getLatestVersionInSemVerRange (range) {
+    const query = this.rangeParser.parse(range)
+    query.reverse = true
+    query.limit = 1
+    const queryResult = await new Promise((resolve, reject) => { // add timeout
+      this.taggedDrive.tree.createReadStream(query)
+        .on('data', function (data) {
+          resolve(data)
+        })
+    })
+    return {
+      version: lexVer.decode(queryResult.key),
+      driveVersion: queryResult.value
+    }
   }
 
   get key () {
