@@ -93,7 +93,6 @@ class Thine extends events.EventEmitter {
     if (!await fse.pathExists(sourceFolder)) {
       throw new Error('Source folder does not exist.')
     }
-
     const packageJSON = await this._readPackageJSON(sourceFolder)
     const key = packageJSON.thineKey
 
@@ -145,14 +144,36 @@ class Thine extends events.EventEmitter {
         name: key.split('/')[0],
         range: value
       }
-      const pack = await this._loadPack(packageMetadata)
-      const version = await pack.getLatestVersionInSemVerRange(value)
-      const versionDrive = pack.checkoutDriveAtVersion(version.driveVersion)
-      const packPath = path.join(nodeModulesFolderPath, pack.name)
-      await fse.emptyDir(packPath)
-      const changes = await dft.diff({ path: '/', fs: versionDrive }, packPath)
-      console.log(changes)
-      await dft.applyRight({ path: '/', fs: versionDrive }, packPath, changes)
+      const dep = await this._installPack(packageMetadata, nodeModulesFolderPath)
+    }
+  }
+
+  async _installPack (metadata, packageRootPath) {
+    const pack = await this._loadPack(metadata)
+    const version = await pack.getLatestVersionInSemVerRange(metadata.range)
+    const versionDrive = pack.checkoutDriveAtVersion(version.driveVersion)
+    const packPath = path.join(packageRootPath, pack.name)
+    await fse.emptyDir(packPath)
+    const changes = await dft.diff({ path: '/', fs: versionDrive }, packPath)
+    await dft.applyRight({ path: '/', fs: versionDrive }, packPath, changes)
+    let depJSON
+    try {
+      depJSON = await this._readPackageJSON(packPath)
+    } catch {
+      return
+    }
+    if (depJSON.dependencies) {
+      const depNodeModulesFolderPath = path.join(packPath, 'node_modules')
+      await fse.emptyDir(depNodeModulesFolderPath)
+      for (const [key, value] of Object.entries(depJSON.dependencies)) {
+        const packageMetadata = {
+          fullKey: key,
+          key: key.split('/')[1],
+          name: key.split('/')[0],
+          range: value
+        }
+        await this._installPack(packageMetadata, depNodeModulesFolderPath)
+      }
     }
   }
 
