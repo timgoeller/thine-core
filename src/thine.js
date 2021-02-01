@@ -15,8 +15,11 @@ const level = require('level')
 const { v4: uuidv4 } = require('uuid')
 
 class Thine extends events.EventEmitter {
-  constructor () {
+  constructor (opts) {
     super()
+
+    opts = opts || {}
+    this.seed = opts.seed || true
 
     const self = this
 
@@ -286,20 +289,22 @@ class Thine extends events.EventEmitter {
   }
 
   _replicate (pack) {
-    const swarm = hyperswarm()
+    if (this.seed) {
+      const swarm = hyperswarm()
 
-    swarm.on('connection', (connection, info) => {
-      pump(
-        connection,
-        pack.corestore.replicate(info.client),
-        connection
-      )
-    })
+      swarm.on('connection', (connection, info) => {
+        pump(
+          connection,
+          pack.corestore.replicate(info.client),
+          connection
+        )
+      })
 
-    swarm.join(pack.key, {
-      announce: true,
-      lookup: true
-    })
+      swarm.join(pack.key, {
+        announce: true,
+        lookup: true
+      })
+    }
   }
 
   get publishedStoragePath () {
