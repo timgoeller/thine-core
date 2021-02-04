@@ -1,6 +1,6 @@
 {
   "name": "thine-core",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "core component for thine, a peer-to-peer package manager built on top of IPFS and hypercore",
   "main": "index.js",
   "author": "Tim Göller",
