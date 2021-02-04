@@ -294,6 +294,7 @@ class Thine extends events.EventEmitter {
       const swarm = hyperswarm()
 
       swarm.on('connection', (connection, info) => {
+        this.emit('connection', connection, info, pack)
         pump(
           connection,
           pack.corestore.replicate(info.client),
