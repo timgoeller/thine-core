@@ -153,6 +153,7 @@ class Thine extends events.EventEmitter {
 
   async _installPack (metadata, packageRootPath) {
     const pack = await this._loadPack(metadata)
+    await this.cached.db.put(pack.readableKey, metadata.key)
     const version = await pack.getLatestVersionInSemVerRange(metadata.range)
     const versionDrive = pack.checkoutDriveAtVersion(version.driveVersion)
     const packPath = path.join(packageRootPath, pack.name)
@@ -195,7 +196,6 @@ class Thine extends events.EventEmitter {
       await pack.initialized()
       this._replicate(pack)
 
-      await this.cached.db.put(pack.readableKey, metadata.key)
       return Promise.race([
         new Promise((resolve, reject) => {
           pack.ready().then(() => {
